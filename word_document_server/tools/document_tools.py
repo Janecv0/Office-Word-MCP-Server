@@ -216,7 +216,7 @@ async def get_document_xml_tool(filename: str) -> str:
 
 
 async def save_document(file_path: str, source_filename: str) -> Dict[str, Any]:
-    """Save a document copy to a target path, optionally constrained to MCP_OUTPUT_DIR.
+    """Save a document copy to a target path, optionally constrained to DOC_OUTPUT_DIR.
 
     Args:
         file_path: Requested output path or filename
@@ -226,7 +226,7 @@ async def save_document(file_path: str, source_filename: str) -> Dict[str, Any]:
     if not os.path.exists(source_filename):
         return {"error": f"Document {source_filename} does not exist"}
 
-    output_dir = os.getenv("MCP_OUTPUT_DIR")
+    output_dir = os.getenv("DOC_OUTPUT_DIR")
     filename = os.path.basename(file_path) if file_path else ""
 
     try:
@@ -239,7 +239,7 @@ async def save_document(file_path: str, source_filename: str) -> Dict[str, Any]:
             save_path = os.path.join(output_dir, filename)
         else:
             if not file_path:
-                return {"error": "file_path is required when MCP_OUTPUT_DIR is not configured"}
+                return {"error": "file_path is required when DOC_OUTPUT_DIR is not configured"}
             save_path = ensure_docx_extension(file_path)
             filename = os.path.basename(save_path)
 
@@ -264,4 +264,5 @@ async def save_document(file_path: str, source_filename: str) -> Dict[str, Any]:
         return result
     except Exception as e:
         return {"error": f"Failed to save document: {str(e)}"}
+
 
