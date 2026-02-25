@@ -111,6 +111,16 @@ def register_tools():
     def copy_document(source_filename: str, destination_filename: str = None):
         """Create a copy of a Word document."""
         return document_tools.copy_document(source_filename, destination_filename)
+
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="Save Word Document",
+            destructiveHint=True,
+        ),
+    )
+    def save_document(file_path: str, source_filename: str):
+        """Save a Word document to a target path."""
+        return document_tools.save_document(file_path, source_filename)
     
     @mcp.tool(
         annotations=ToolAnnotations(
@@ -567,15 +577,16 @@ def register_tools():
             filename, text_to_find, match_case, whole_word
         )
     
-    @mcp.tool(
-        annotations=ToolAnnotations(
-            title="Convert to PDF",
-            destructiveHint=True,
-        ),
-    )
-    def convert_to_pdf(filename: str, output_filename: str = None):
-        """Convert a Word document to PDF format."""
-        return extended_document_tools.convert_to_pdf(filename, output_filename)
+    # converting to PDF doesn't work
+    # @mcp.tool(
+    #     annotations=ToolAnnotations(
+    #         title="Convert to PDF",
+    #         destructiveHint=True,
+    #     ),
+    # )
+    # def convert_to_pdf(filename: str, output_filename: str = None):
+    #     """Convert a Word document to PDF format."""
+    #     return extended_document_tools.convert_to_pdf(filename, output_filename)
 
     @mcp.tool(
         annotations=ToolAnnotations(

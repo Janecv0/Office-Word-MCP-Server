@@ -3,6 +3,7 @@ Document creation and manipulation tools for Word Document Server.
 """
 import os
 import json
+from urllib.parse import quote
 from typing import Dict, List, Optional, Any
 from docx import Document
 
@@ -212,3 +213,55 @@ async def merge_documents(target_filename: str, source_filenames: List[str], add
 async def get_document_xml_tool(filename: str) -> str:
     """Get the raw XML structure of a Word document."""
     return get_document_xml(filename)
+
+
+async def save_document(file_path: str, source_filename: str) -> Dict[str, Any]:
+    """Save a document copy to a target path, optionally constrained to MCP_OUTPUT_DIR.
+
+    Args:
+        file_path: Requested output path or filename
+        source_filename: Existing source .docx to save/copy
+    """
+    source_filename = ensure_docx_extension(source_filename)
+    if not os.path.exists(source_filename):
+        return {"error": f"Document {source_filename} does not exist"}
+
+    output_dir = os.getenv("MCP_OUTPUT_DIR")
+    filename = os.path.basename(file_path) if file_path else ""
+
+    try:
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+            if not filename:
+                filename = os.path.basename(source_filename) or "document.docx"
+            if not filename.lower().endswith(".docx"):
+                filename += ".docx"
+            save_path = os.path.join(output_dir, filename)
+        else:
+            if not file_path:
+                return {"error": "file_path is required when MCP_OUTPUT_DIR is not configured"}
+            save_path = ensure_docx_extension(file_path)
+            filename = os.path.basename(save_path)
+
+        is_writeable, error_message = check_file_writeable(save_path)
+        if not is_writeable:
+            return {"error": f"Cannot save document: {error_message}"}
+
+        success, message, saved_path = create_document_copy(source_filename, save_path)
+        if not success or not saved_path:
+            return {"error": f"Failed to save document: {message}"}
+
+        result: Dict[str, Any] = {
+            "message": f"Document saved to {saved_path}",
+            "file_path": saved_path,
+        }
+
+        download_base_url = os.getenv("MCP_DOWNLOAD_BASE_URL")
+        transport_mode = os.getenv("MCP_TRANSPORT", "stdio").lower()
+        if download_base_url and transport_mode in ("streamable-http", "sse", "http"):
+            result["download_url"] = f"{download_base_url.rstrip('/')}/{quote(filename)}"
+
+        return result
+    except Exception as e:
+        return {"error": f"Failed to save document: {str(e)}"}
+
