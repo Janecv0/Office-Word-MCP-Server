@@ -256,13 +256,13 @@ async def save_document(file_path: str, source_filename: str) -> Dict[str, Any]:
             "file_path": saved_path,
         }
 
-        download_base_url = os.getenv("MCP_DOWNLOAD_BASE_URL")
-        transport_mode = os.getenv("MCP_TRANSPORT", "stdio").lower()
-        if download_base_url and transport_mode in ("streamable-http", "sse", "http"):
+        download_base_url = os.getenv("DOC_DOWNLOAD_BASE_URL", os.getenv("MCP_DOWNLOAD_BASE_URL"))
+        if download_base_url:
             result["download_url"] = f"{download_base_url.rstrip('/')}/{quote(filename)}"
 
         return result
     except Exception as e:
         return {"error": f"Failed to save document: {str(e)}"}
+
 
 
