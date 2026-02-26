@@ -121,6 +121,10 @@ async def list_available_documents(directory: str = ".") -> str:
         directory: Directory to search for Word documents
     """
     try:
+        output_dir = os.getenv("DOC_OUTPUT_DIR")
+        if directory in (".", "") and output_dir:
+            directory = output_dir
+
         if not os.path.exists(directory):
             return f"Directory {directory} does not exist"
         
@@ -272,6 +276,16 @@ async def save_document(file_path: str, source_filename: str) -> Dict[str, Any]:
                 return {"error": "file_path is required when DOC_OUTPUT_DIR is not configured"}
             save_path = ensure_docx_extension(file_path)
             filename = os.path.basename(save_path)
+
+        if os.path.abspath(source_path) == os.path.abspath(save_path):
+            result: Dict[str, Any] = {
+                "message": f"Document already saved at {save_path}",
+                "file_path": save_path,
+            }
+            download_base_url = os.getenv("DOC_DOWNLOAD_BASE_URL", os.getenv("MCP_DOWNLOAD_BASE_URL"))
+            if download_base_url:
+                result["download_url"] = f"{download_base_url.rstrip('/')}/{quote(filename)}"
+            return result
 
         is_writeable, error_message = check_file_writeable(save_path)
         if not is_writeable:
