@@ -12,6 +12,31 @@ from word_document_server.utils.document_utils import get_document_properties, e
 from word_document_server.core.styles import ensure_heading_style, ensure_table_style
 
 
+def _resolve_output_target(filename: str) -> str:
+    """Resolve target path into DOC_OUTPUT_DIR for basename-only inputs."""
+    filename = ensure_docx_extension(filename)
+    output_dir = os.getenv("DOC_OUTPUT_DIR")
+    if output_dir and not os.path.isabs(filename) and os.path.dirname(filename) == "":
+        os.makedirs(output_dir, exist_ok=True)
+        return os.path.join(output_dir, filename)
+    return filename
+
+
+def _resolve_source_document(filename: str) -> Optional[str]:
+    """Resolve a source document path, falling back to DOC_OUTPUT_DIR for basenames."""
+    filename = ensure_docx_extension(filename)
+    if os.path.exists(filename):
+        return filename
+
+    output_dir = os.getenv("DOC_OUTPUT_DIR")
+    if output_dir and not os.path.isabs(filename):
+        candidate = os.path.join(output_dir, os.path.basename(filename))
+        if os.path.exists(candidate):
+            return candidate
+
+    return None
+
+
 async def create_document(filename: str, title: Optional[str] = None, author: Optional[str] = None) -> str:
     """Create a new Word document with optional metadata.
     
@@ -20,7 +45,7 @@ async def create_document(filename: str, title: Optional[str] = None, author: Op
         title: Optional title for the document metadata
         author: Optional author for the document metadata
     """
-    filename = ensure_docx_extension(filename)
+    filename = _resolve_output_target(filename)
     
     # Check if file is writeable
     is_writeable, error_message = check_file_writeable(filename)
@@ -223,8 +248,13 @@ async def save_document(file_path: str, source_filename: str) -> Dict[str, Any]:
         source_filename: Existing source .docx to save/copy
     """
     source_filename = ensure_docx_extension(source_filename)
-    if not os.path.exists(source_filename):
-        return {"error": f"Document {source_filename} does not exist"}
+    source_path = _resolve_source_document(source_filename)
+    if not source_path:
+        checked = [source_filename]
+        output_dir = os.getenv("DOC_OUTPUT_DIR")
+        if output_dir and not os.path.isabs(source_filename):
+            checked.append(os.path.join(output_dir, os.path.basename(source_filename)))
+        return {"error": f"Document {source_filename} does not exist (checked: {', '.join(checked)})"}
 
     output_dir = os.getenv("DOC_OUTPUT_DIR")
     filename = os.path.basename(file_path) if file_path else ""
@@ -247,7 +277,7 @@ async def save_document(file_path: str, source_filename: str) -> Dict[str, Any]:
         if not is_writeable:
             return {"error": f"Cannot save document: {error_message}"}
 
-        success, message, saved_path = create_document_copy(source_filename, save_path)
+        success, message, saved_path = create_document_copy(source_path, save_path)
         if not success or not saved_path:
             return {"error": f"Failed to save document: {message}"}
 
