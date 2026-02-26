@@ -6,6 +6,7 @@ Supports multiple transports: stdio, sse, and streamable-http using standalone F
 
 import os
 import sys
+from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -15,6 +16,7 @@ load_dotenv()
 os.environ.setdefault('FASTMCP_LOG_LEVEL', 'INFO')
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
+from starlette.responses import FileResponse, JSONResponse
 from word_document_server.tools import (
     document_tools,
     content_tools,
@@ -90,6 +92,27 @@ mcp = FastMCP("Word Document Server")
 
 def register_tools():
     """Register all tools with the MCP server using FastMCP decorators."""
+
+    @mcp.custom_route("/files/{filename}", methods=["GET"])
+    async def download_document(request):
+        """Serve generated .docx files from DOC_OUTPUT_DIR."""
+        filename = request.path_params.get("filename", "")
+        safe_name = os.path.basename(filename)
+        if safe_name != filename or not safe_name.lower().endswith(".docx"):
+            return JSONResponse({"error": "Not found"}, status_code=404)
+
+        output_dir = Path(
+            os.getenv("DOC_OUTPUT_DIR", os.getenv("MCP_OUTPUT_DIR", "./output"))
+        ).resolve()
+        file_path = (output_dir / safe_name).resolve()
+        if not file_path.exists() or file_path.parent != output_dir:
+            return JSONResponse({"error": "Not found"}, status_code=404)
+
+        return FileResponse(
+            str(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=safe_name,
+        )
     
     # Document tools (create, copy, info, etc.)
     @mcp.tool(
