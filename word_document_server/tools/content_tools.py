@@ -14,6 +14,22 @@ from word_document_server.utils.document_utils import find_and_replace_text, ins
 from word_document_server.core.styles import ensure_heading_style, ensure_table_style
 
 
+def _resolve_existing_doc_path(filename: str) -> Optional[str]:
+    """Resolve an existing document path with DOC_OUTPUT_DIR fallback."""
+    normalized = ensure_docx_extension(filename)
+    if os.path.exists(normalized):
+        return normalized
+
+    output_dir = os.getenv("DOC_OUTPUT_DIR")
+    base_name = os.path.basename(normalized)
+    if output_dir and base_name:
+        candidate = os.path.join(output_dir, base_name)
+        if os.path.exists(candidate):
+            return candidate
+
+    return None
+
+
 async def add_heading(filename: str, text: str, level: int = 1,
                       font_name: Optional[str] = None, font_size: Optional[int] = None,
                       bold: Optional[bool] = None, italic: Optional[bool] = None,
@@ -30,7 +46,7 @@ async def add_heading(filename: str, text: str, level: int = 1,
         italic: True/False for italic text
         border_bottom: True to add bottom border (for section headers)
     """
-    filename = ensure_docx_extension(filename)
+    resolved_filename = _resolve_existing_doc_path(filename)
 
     # Ensure level is converted to integer
     try:
@@ -42,17 +58,17 @@ async def add_heading(filename: str, text: str, level: int = 1,
     if level < 1 or level > 9:
         return f"Invalid heading level: {level}. Level must be between 1 and 9."
 
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
+    if not resolved_filename:
+        return f"Document {ensure_docx_extension(filename)} does not exist"
 
     # Check if file is writeable
-    is_writeable, error_message = check_file_writeable(filename)
+    is_writeable, error_message = check_file_writeable(resolved_filename)
     if not is_writeable:
         # Suggest creating a copy
         return f"Cannot modify document: {error_message}. Consider creating a copy first or creating a new document."
 
     try:
-        doc = Document(filename)
+        doc = Document(resolved_filename)
 
         # Ensure heading styles exist
         ensure_heading_style(doc)
@@ -104,8 +120,8 @@ async def add_heading(filename: str, text: str, level: int = 1,
             pBdr.append(bottom)
             pPr.append(pBdr)
 
-        doc.save(filename)
-        return f"Heading '{text}' (level {level}) added to {filename}"
+        doc.save(resolved_filename)
+        return f"Heading '{text}' (level {level}) added to {resolved_filename}"
     except Exception as e:
         return f"Failed to add heading: {str(e)}"
 
@@ -126,19 +142,19 @@ async def add_paragraph(filename: str, text: str, style: Optional[str] = None,
         italic: True/False for italic text
         color: RGB color as hex string (e.g., '000000' for black)
     """
-    filename = ensure_docx_extension(filename)
+    resolved_filename = _resolve_existing_doc_path(filename)
 
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
+    if not resolved_filename:
+        return f"Document {ensure_docx_extension(filename)} does not exist"
 
     # Check if file is writeable
-    is_writeable, error_message = check_file_writeable(filename)
+    is_writeable, error_message = check_file_writeable(resolved_filename)
     if not is_writeable:
         # Suggest creating a copy
         return f"Cannot modify document: {error_message}. Consider creating a copy first or creating a new document."
 
     try:
-        doc = Document(filename)
+        doc = Document(resolved_filename)
         paragraph = doc.add_paragraph(text)
 
         if style:
@@ -147,8 +163,8 @@ async def add_paragraph(filename: str, text: str, style: Optional[str] = None,
             except KeyError:
                 # Style doesn't exist, use normal and report it
                 paragraph.style = doc.styles['Normal']
-                doc.save(filename)
-                return f"Style '{style}' not found, paragraph added with default style to {filename}"
+                doc.save(resolved_filename)
+                return f"Style '{style}' not found, paragraph added with default style to {resolved_filename}"
 
         # Apply formatting to all runs in the paragraph
         if any([font_name, font_size, bold is not None, italic is not None, color]):
@@ -166,8 +182,8 @@ async def add_paragraph(filename: str, text: str, style: Optional[str] = None,
                     color_hex = color.lstrip('#')
                     run.font.color.rgb = RGBColor.from_string(color_hex)
 
-        doc.save(filename)
-        return f"Paragraph added to {filename}"
+        doc.save(resolved_filename)
+        return f"Paragraph added to {resolved_filename}"
     except Exception as e:
         return f"Failed to add paragraph: {str(e)}"
 
@@ -181,19 +197,19 @@ async def add_table(filename: str, rows: int, cols: int, data: Optional[List[Lis
         cols: Number of columns in the table
         data: Optional 2D array of data to fill the table
     """
-    filename = ensure_docx_extension(filename)
+    resolved_filename = _resolve_existing_doc_path(filename)
     
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
+    if not resolved_filename:
+        return f"Document {ensure_docx_extension(filename)} does not exist"
     
     # Check if file is writeable
-    is_writeable, error_message = check_file_writeable(filename)
+    is_writeable, error_message = check_file_writeable(resolved_filename)
     if not is_writeable:
         # Suggest creating a copy
         return f"Cannot modify document: {error_message}. Consider creating a copy first or creating a new document."
     
     try:
-        doc = Document(filename)
+        doc = Document(resolved_filename)
         table = doc.add_table(rows=rows, cols=cols)
         
         # Try to set the table style
@@ -213,8 +229,8 @@ async def add_table(filename: str, rows: int, cols: int, data: Optional[List[Lis
                         break
                     table.cell(i, j).text = str(cell_text)
         
-        doc.save(filename)
-        return f"Table ({rows}x{cols}) added to {filename}"
+        doc.save(resolved_filename)
+        return f"Table ({rows}x{cols}) added to {resolved_filename}"
     except Exception as e:
         return f"Failed to add table: {str(e)}"
 
@@ -462,14 +478,17 @@ async def search_and_replace(filename: str, find_text: str, replace_text: str) -
 
 async def insert_header_near_text_tool(filename: str, target_text: str = None, header_title: str = "", position: str = 'after', header_style: str = 'Heading 1', target_paragraph_index: int = None) -> str:
     """Insert a header (with specified style) before or after the target paragraph. Specify by text or paragraph index."""
+    filename = ensure_docx_extension(filename)
     return insert_header_near_text(filename, target_text, header_title, position, header_style, target_paragraph_index)
 
 async def insert_numbered_list_near_text_tool(filename: str, target_text: str = None, list_items: list = None, position: str = 'after', target_paragraph_index: int = None, bullet_type: str = 'bullet') -> str:
     """Insert a bulleted or numbered list before or after the target paragraph. Specify by text or paragraph index."""
+    filename = ensure_docx_extension(filename)
     return insert_numbered_list_near_text(filename, target_text, list_items, position, target_paragraph_index, bullet_type)
 
 async def insert_line_or_paragraph_near_text_tool(filename: str, target_text: str = None, line_text: str = "", position: str = 'after', line_style: str = None, target_paragraph_index: int = None) -> str:
     """Insert a new line or paragraph (with specified or matched style) before or after the target paragraph. Specify by text or paragraph index."""
+    filename = ensure_docx_extension(filename)
     return insert_line_or_paragraph_near_text(filename, target_text, line_text, position, line_style, target_paragraph_index)
 
 async def replace_paragraph_block_below_header_tool(filename: str, header_text: str, new_paragraphs: list, detect_block_end_fn=None) -> str:

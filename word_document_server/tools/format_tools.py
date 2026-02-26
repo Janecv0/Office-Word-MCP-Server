@@ -22,6 +22,22 @@ from word_document_server.core.tables import (
 )
 
 
+def _resolve_existing_doc_path(filename: str) -> Optional[str]:
+    """Resolve an existing document path with DOC_OUTPUT_DIR fallback."""
+    normalized = ensure_docx_extension(filename)
+    if os.path.exists(normalized):
+        return normalized
+
+    output_dir = os.getenv("DOC_OUTPUT_DIR")
+    base_name = os.path.basename(normalized)
+    if output_dir and base_name:
+        candidate = os.path.join(output_dir, base_name)
+        if os.path.exists(candidate):
+            return candidate
+
+    return None
+
+
 async def format_text(filename: str, paragraph_index: int, start_pos: int, end_pos: int, 
                      bold: Optional[bool] = None, italic: Optional[bool] = None, 
                      underline: Optional[bool] = None, color: Optional[str] = None,
@@ -202,18 +218,18 @@ async def format_table(filename: str, table_index: int,
         border_style: Style for borders ('none', 'single', 'double', 'thick')
         shading: 2D list of cell background colors (by row and column)
     """
-    filename = ensure_docx_extension(filename)
+    resolved_filename = _resolve_existing_doc_path(filename)
     
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
+    if not resolved_filename:
+        return f"Document {ensure_docx_extension(filename)} does not exist"
     
     # Check if file is writeable
-    is_writeable, error_message = check_file_writeable(filename)
+    is_writeable, error_message = check_file_writeable(resolved_filename)
     if not is_writeable:
         return f"Cannot modify document: {error_message}. Consider creating a copy first."
     
     try:
-        doc = Document(filename)
+        doc = Document(resolved_filename)
         
         # Validate table index
         if table_index < 0 or table_index >= len(doc.tables):
@@ -225,7 +241,7 @@ async def format_table(filename: str, table_index: int,
         success = apply_table_style(table, has_header_row or False, border_style, shading)
         
         if success:
-            doc.save(filename)
+            doc.save(resolved_filename)
             return f"Table at index {table_index} formatted successfully."
         else:
             return f"Failed to format table at index {table_index}."
