@@ -295,9 +295,13 @@ async def save_document(file_path: str, source_filename: str) -> Dict[str, Any]:
         if not success or not saved_path:
             return {"error": f"Failed to save document: {message}"}
 
+        if not os.path.exists(saved_path):
+            return {"error": f"Save reported success but file not found at {saved_path}"}
+
         result: Dict[str, Any] = {
             "message": f"Document saved to {saved_path}",
             "file_path": saved_path,
+            "file_size_bytes": os.path.getsize(saved_path),
         }
 
         download_base_url = os.getenv("DOC_DOWNLOAD_BASE_URL", os.getenv("MCP_DOWNLOAD_BASE_URL"))
