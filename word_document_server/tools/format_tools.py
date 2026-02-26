@@ -5,6 +5,7 @@ These tools handle formatting operations for Word documents,
 including text formatting, table formatting, and custom styles.
 """
 import os
+import time
 from typing import List, Optional, Dict, Any
 from docx import Document
 from docx.shared import Pt, RGBColor
@@ -240,10 +241,18 @@ async def format_table(filename: str, table_index: int,
     
     try:
         doc = Document(resolved_filename)
-        
+
+        # Retry a few times when no table is visible immediately after creation.
+        if len(doc.tables) == 0 and table_index == 0:
+            for _ in range(3):
+                time.sleep(0.15)
+                doc = Document(resolved_filename)
+                if len(doc.tables) > 0:
+                    break
+
         # Validate table index
         if table_index < 0 or table_index >= len(doc.tables):
-            return f"Invalid table index. Document has {len(doc.tables)} tables (0-{len(doc.tables)-1})."
+            return f"Invalid table index. Document has {len(doc.tables)} tables (0-{len(doc.tables)-1}) in {resolved_filename}."
         
         table = doc.tables[table_index]
         

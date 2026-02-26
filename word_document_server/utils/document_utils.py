@@ -10,6 +10,16 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
 
+def _normalize_text_for_match(value: str) -> str:
+    """Normalize text for more robust paragraph matching."""
+    if value is None:
+        return ""
+    normalized = str(value).strip().lower()
+    normalized = normalized.replace("\u2013", "-").replace("\u2014", "-").replace("\u2011", "-")
+    normalized = " ".join(normalized.split())
+    return normalized
+
+
 def get_document_properties(doc_path: str) -> Dict[str, Any]:
     """Get properties of a Word document."""
     import os
@@ -211,7 +221,7 @@ def insert_header_near_text(doc_path: str, target_text: str = None, header_title
                 # Skip TOC paragraphs
                 if p.style and p.style.name.lower().startswith("toc"):
                     continue
-                if target_text and target_text in p.text:
+                if target_text and _normalize_text_for_match(target_text) in _normalize_text_for_match(p.text):
                     para = p
                     found = True
                     break
@@ -264,7 +274,7 @@ def insert_line_or_paragraph_near_text(doc_path: str, target_text: str = None, l
                 # Skip TOC paragraphs
                 if p.style and p.style.name.lower().startswith("toc"):
                     continue
-                if target_text and target_text in p.text:
+                if target_text and _normalize_text_for_match(target_text) in _normalize_text_for_match(p.text):
                     para = p
                     found = True
                     break
@@ -365,7 +375,7 @@ def insert_numbered_list_near_text(doc_path: str, target_text: str = None, list_
                 # Skip TOC paragraphs
                 if p.style and p.style.name.lower().startswith("toc"):
                     continue
-                if target_text and target_text in p.text:
+                if target_text and _normalize_text_for_match(target_text) in _normalize_text_for_match(p.text):
                     para = p
                     found = True
                     break
