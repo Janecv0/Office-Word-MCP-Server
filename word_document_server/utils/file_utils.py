@@ -81,5 +81,12 @@ def ensure_docx_extension(filename: str) -> str:
         Filename with .docx extension
     """
     if not filename.endswith('.docx'):
-        return filename + '.docx'
+        filename = filename + '.docx'
+
+    # When DOC_OUTPUT_DIR is configured, resolve basename paths into it.
+    # This keeps all tools consistent when users pass only "name.docx".
+    output_dir = os.getenv("DOC_OUTPUT_DIR")
+    if output_dir and filename and not os.path.isabs(filename) and os.path.dirname(filename) == "":
+        return os.path.join(output_dir, filename)
+
     return filename
