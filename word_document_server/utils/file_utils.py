@@ -80,7 +80,11 @@ def ensure_docx_extension(filename: str) -> str:
     Returns:
         Filename with .docx extension
     """
-    if not filename.endswith('.docx'):
+    filename = str(filename).strip().strip('"').strip("'")
+    if not filename:
+        filename = "document.docx"
+
+    if not filename.lower().endswith('.docx'):
         filename = filename + '.docx'
 
     # When DOC_OUTPUT_DIR is configured, resolve basename paths into it.

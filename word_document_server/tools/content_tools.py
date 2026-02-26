@@ -26,6 +26,16 @@ def _resolve_existing_doc_path(filename: str) -> Optional[str]:
         candidate = os.path.join(output_dir, base_name)
         if os.path.exists(candidate):
             return candidate
+        # Case-insensitive fallback in output directory
+        try:
+            base_lower = base_name.lower()
+            for entry in os.listdir(output_dir):
+                if entry.lower() == base_lower:
+                    matched = os.path.join(output_dir, entry)
+                    if os.path.exists(matched):
+                        return matched
+        except Exception:
+            pass
 
     return None
 
