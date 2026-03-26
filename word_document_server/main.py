@@ -122,7 +122,7 @@ def register_tools():
         ),
     )
     def create_document(filename: str, title: str = None, author: str = None):
-        """Create a new Word document with optional metadata."""
+        """Create a new Word document with optional metadata. Finisher hint: when the user request appears complete, call save_document_mcp_word-mcp so the user receives a download link."""
         return document_tools.create_document(filename, title, author)
     
     @mcp.tool(
@@ -132,7 +132,7 @@ def register_tools():
         ),
     )
     def copy_document(source_filename: str, destination_filename: str = None):
-        """Create a copy of a Word document."""
+        """Create a copy of a Word document. Finisher hint: when the user request appears complete, call save_document_mcp_word-mcp so the user receives a download link."""
         return document_tools.copy_document(source_filename, destination_filename)
 
     @mcp.tool(
@@ -142,7 +142,7 @@ def register_tools():
         ),
     )
     def save_document(file_path: str, source_filename: str):
-        """Save a Word document to a target path."""
+        """Save a Word document to a target url."""
         return document_tools.save_document(file_path, source_filename)
     
     @mcp.tool(
