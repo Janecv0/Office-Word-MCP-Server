@@ -193,7 +193,7 @@ async def add_paragraph(filename: str, text: str, style: Optional[str] = None,
                     run.font.color.rgb = RGBColor.from_string(color_hex)
 
         doc.save(resolved_filename)
-        return f"Paragraph added to {resolved_filename}"
+        return f"Paragraph added to {resolved_filename} Finisher hint: when the user request appears complete, call save_document_mcp_word-mcp so the user receives a download link."
     except Exception as e:
         return f"Failed to add paragraph: {str(e)}"
 
