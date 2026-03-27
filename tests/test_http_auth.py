@@ -127,6 +127,36 @@ def test_invalid_or_expired_signature_returns_403_even_with_api_key(monkeypatch)
     assert response.json() == {"error": "Invalid or expired download signature."}
 
 
+def test_expired_signature_returns_json_by_default(monkeypatch):
+    monkeypatch.setenv("DOC_DOWNLOAD_SIGNING_SECRET", "signing-secret")
+    monkeypatch.delenv("WORD_MCP_API_KEY", raising=False)
+    client = TestClient(_create_app())
+
+    expires_at = int(time.time()) - 5
+    signature = build_download_signature("sample.docx", expires_at, "signing-secret")
+    response = client.get(f"/files/sample.docx?exp={expires_at}&sig={signature}")
+
+    assert response.status_code == 403
+    assert response.json() == {"error": "Invalid or expired download signature."}
+
+
+def test_expired_signature_returns_html_for_browser_requests(monkeypatch):
+    monkeypatch.setenv("DOC_DOWNLOAD_SIGNING_SECRET", "signing-secret")
+    monkeypatch.delenv("WORD_MCP_API_KEY", raising=False)
+    client = TestClient(_create_app())
+
+    expires_at = int(time.time()) - 5
+    signature = build_download_signature("sample.docx", expires_at, "signing-secret")
+    response = client.get(
+        f"/files/sample.docx?exp={expires_at}&sig={signature}",
+        headers={"accept": "text/html"},
+    )
+
+    assert response.status_code == 403
+    assert "text/html" in response.headers.get("content-type", "")
+    assert "Download Link Expired" in response.text
+
+
 def test_file_route_without_signature_still_requires_api_key(monkeypatch):
     monkeypatch.setenv("DOC_DOWNLOAD_SIGNING_SECRET", "signing-secret")
     monkeypatch.delenv("WORD_MCP_API_KEY", raising=False)
