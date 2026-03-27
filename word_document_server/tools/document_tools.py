@@ -3,13 +3,13 @@ Document creation and manipulation tools for Word Document Server.
 """
 import os
 import json
-from urllib.parse import quote
 from typing import Dict, List, Optional, Any
 from docx import Document
 
 from word_document_server.utils.file_utils import check_file_writeable, ensure_docx_extension, create_document_copy
 from word_document_server.utils.document_utils import get_document_properties, extract_document_text, get_document_structure, get_document_xml, insert_header_near_text, insert_line_or_paragraph_near_text
 from word_document_server.core.styles import ensure_heading_style, ensure_table_style
+from word_document_server.security.http_auth import build_download_url
 
 
 def _resolve_output_target(filename: str) -> str:
@@ -284,7 +284,7 @@ async def save_document(file_path: str, source_filename: str) -> Dict[str, Any]:
             }
             download_base_url = os.getenv("DOC_DOWNLOAD_BASE_URL", os.getenv("MCP_DOWNLOAD_BASE_URL"))
             if download_base_url:
-                result["download_url"] = f"{download_base_url.rstrip('/')}/{quote(filename)}"
+                result["download_url"] = build_download_url(download_base_url, filename)
             return result
 
         is_writeable, error_message = check_file_writeable(save_path)
@@ -306,7 +306,7 @@ async def save_document(file_path: str, source_filename: str) -> Dict[str, Any]:
 
         download_base_url = os.getenv("DOC_DOWNLOAD_BASE_URL", os.getenv("MCP_DOWNLOAD_BASE_URL"))
         if download_base_url:
-            result["download_url"] = f"{download_base_url.rstrip('/')}/{quote(filename)}"
+            result["download_url"] = build_download_url(download_base_url, filename)
 
         return result
     except Exception as e:

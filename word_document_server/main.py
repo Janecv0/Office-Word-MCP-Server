@@ -17,6 +17,11 @@ os.environ.setdefault('FASTMCP_LOG_LEVEL', 'INFO')
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from starlette.responses import FileResponse, JSONResponse
+from word_document_server.security.http_auth import (
+    APIKeyMiddleware,
+    get_api_key,
+    get_api_key_header_name,
+)
 from word_document_server.tools import (
     document_tools,
     content_tools,
@@ -88,6 +93,20 @@ def setup_logging(debug_mode):
 
 # Initialize FastMCP server
 mcp = FastMCP("Word Document Server")
+
+
+def _build_streamable_http_app(path: str):
+    """Build a streamable-http ASGI app across FastMCP versions."""
+    if hasattr(mcp, "http_app"):
+        return mcp.http_app(path=path, transport="streamable-http")
+
+    if hasattr(mcp, "streamable_http_app"):
+        try:
+            return mcp.streamable_http_app(path=path)
+        except TypeError:
+            return mcp.streamable_http_app()
+
+    raise RuntimeError("FastMCP version does not expose streamable HTTP app builder.")
 
 
 def register_tools():
@@ -754,12 +773,29 @@ def run_server():
         elif transport_type == 'streamable-http':
             # Run with streamable HTTP transport
             print(f"Server running on streamable-http transport at http://{config['host']}:{config['port']}{config['path']}")
-            mcp.run(
-                transport='streamable-http',
-                host=config['host'],
-                port=config['port'],
-                path=config['path']
-            )
+            api_key = get_api_key()
+            if api_key:
+                # Use ASGI app wiring when auth is enabled so middleware protects
+                # both MCP endpoint and custom routes (for example /files/*).
+                import uvicorn
+
+                api_key_header = get_api_key_header_name()
+                app = _build_streamable_http_app(config['path'])
+                app.add_middleware(
+                    APIKeyMiddleware,
+                    api_key=api_key,
+                    header_name=api_key_header,
+                    exempt_paths=["/health", "/healthz"],
+                )
+                print(f"API key auth enabled for streamable-http via header '{api_key_header}'")
+                uvicorn.run(app, host=config['host'], port=config['port'])
+            else:
+                mcp.run(
+                    transport='streamable-http',
+                    host=config['host'],
+                    port=config['port'],
+                    path=config['path']
+                )
             
         elif transport_type == 'sse':
             # Run with SSE transport
