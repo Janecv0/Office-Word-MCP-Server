@@ -92,7 +92,47 @@ def setup_logging(debug_mode):
 
 
 # Initialize FastMCP server
-mcp = FastMCP("Word Document Server")
+mcp = FastMCP(
+    "Word Document Server",
+    instructions="""
+You are connected to a Word document manipulation server.
+
+WORKFLOW
+1. Call list_available_documents to discover existing .docx files.
+2. Call get_document_outline or get_document_text to understand document structure.
+3. Use paragraph_index values (0-based) from get_document_outline when targeting specific locations.
+4. After finishing all edits, call save_document and return the download_url to the user.
+
+INDEXING CONVENTIONS
+- All paragraph, table, row, and column indices are 0-based (first = 0).
+- Footnote IDs are 1-based (first footnote = 1).
+
+COLOR FORMAT
+- Colors are 6-character hex strings WITHOUT a leading '#', e.g. "FF0000" for red, "000000" for black.
+- Common English color names ("red", "blue", "white") are also accepted.
+
+WIDTH UNITS
+- Width values default to points unless width_type is specified.
+- Accepted width_type values: "points", "inches", "cm", "percent".
+
+SAVING
+- All modification tools auto-save to the same file in-place — no save needed between edits.
+- Call save_document only when you want to produce a download link for the user.
+- save_document returns a download_url field — always pass this URL to the user as the final step.
+
+TOOL CATEGORIES
+- Inspect documents:      get_document_info, get_document_text, get_document_outline, get_document_xml, list_available_documents, get_paragraph_text_from_document, find_text_in_document
+- Document lifecycle:     create_document, copy_document, save_document
+- Add content:            add_paragraph, add_heading, add_picture, add_table, add_page_break
+- Insert near content:    insert_header_near_text, insert_line_or_paragraph_near_text, insert_numbered_list_near_text
+- Edit existing content:  search_and_replace, delete_paragraph, replace_paragraph_block_below_header, replace_block_between_manual_anchors
+- Table formatting:       format_table, set_table_cell_shading, apply_table_alternating_rows, highlight_table_header, merge_table_cells, merge_table_cells_horizontal, merge_table_cells_vertical, set_table_cell_alignment, set_table_alignment_all, set_table_column_width, set_table_column_widths, set_table_width, auto_fit_table_columns, format_table_cell_text, set_table_cell_padding
+- Text & style:           format_text, create_custom_style
+- Footnotes:              add_footnote_robust (preferred), add_footnote_after_text, add_footnote_before_text, add_footnote_to_document, add_footnote_enhanced, add_endnote_to_document, customize_footnote_style, delete_footnote_robust (preferred), delete_footnote_from_document, validate_document_footnotes
+- Comments:               get_all_comments, get_comments_by_author, get_comments_for_paragraph
+- Protection:             protect_document, unprotect_document
+""",
+)
 
 
 def _build_streamable_http_app(path: str):
@@ -141,7 +181,7 @@ def register_tools():
         ),
     )
     def create_document(filename: str, title: str = None, author: str = None):
-        """Create a new Word document with optional metadata. Finisher hint: when the user request appears complete, call save_document_mcp_word-mcp so the user receives a download link."""
+        """Create a new Word document with optional metadata. After all edits are complete and you want to present the document to the user, call save_document and return the download_url from its response to the user."""
         return document_tools.create_document(filename, title, author)
     
     @mcp.tool(
@@ -151,7 +191,7 @@ def register_tools():
         ),
     )
     def copy_document(source_filename: str, destination_filename: str = None):
-        """Create a copy of a Word document. Finisher hint: when the user request appears complete, call save_document_mcp_word-mcp so the user receives a download link."""
+        """Create a copy of a Word document. After all edits are complete and you want to present the document to the user, call save_document and return the download_url from its response to the user."""
         return document_tools.copy_document(source_filename, destination_filename)
 
     @mcp.tool(
@@ -161,7 +201,7 @@ def register_tools():
         ),
     )
     def save_document(file_path: str, source_filename: str):
-        """Save a Word document to a target url."""
+        """Save a Word document to a file path and return a download_url. Always call this as the final step before presenting any document to the user, then include the download_url in your response so the user can download it."""
         return document_tools.save_document(file_path, source_filename)
     
     @mcp.tool(
@@ -171,7 +211,7 @@ def register_tools():
         ),
     )
     def get_document_info(filename: str):
-        """Get information about a Word document."""
+        """Return document metadata: page count, word count, author, creation date, last-modified date, and core properties."""
         return document_tools.get_document_info(filename)
     
     @mcp.tool(
@@ -181,7 +221,7 @@ def register_tools():
         ),
     )
     def get_document_text(filename: str):
-        """Extract all text from a Word document."""
+        """Extract all plain text from a Word document in paragraph order. Use get_document_outline instead when you need structure (headings, paragraph indices)."""
         return document_tools.get_document_text(filename)
     
     @mcp.tool(
@@ -191,7 +231,7 @@ def register_tools():
         ),
     )
     def get_document_outline(filename: str):
-        """Get the structure of a Word document."""
+        """Get the heading and paragraph structure of a Word document. Returns each paragraph's 0-based index, style name, and text. Use this before targeting content by index."""
         return document_tools.get_document_outline(filename)
     
     @mcp.tool(
@@ -211,7 +251,7 @@ def register_tools():
         ),
     )
     def get_document_xml(filename: str):
-        """Get the raw XML structure of a Word document."""
+        """Return the raw OOXML markup of the document body. Use for low-level formatting inspection or XML debugging. Prefer get_document_outline for navigation — this output can be large."""
         return document_tools.get_document_xml_tool(filename)
     
     @mcp.tool(
@@ -220,7 +260,7 @@ def register_tools():
         ),
     )
     def insert_header_near_text(filename: str, target_text: str = None, header_title: str = None, position: str = 'after', header_style: str = 'Heading 1', target_paragraph_index: int = None):
-        """Insert a header (with specified style) before or after the target paragraph. Specify by text or paragraph index. Args: filename (str), target_text (str, optional), header_title (str), position ('before' or 'after'), header_style (str, default 'Heading 1'), target_paragraph_index (int, optional)."""
+        """Insert a heading paragraph before or after an existing paragraph. Locate the target by text (target_text) or 0-based index (target_paragraph_index); supply at least one. header_style defaults to "Heading 1". position: "before" or "after"."""
         return content_tools.insert_header_near_text_tool(filename, target_text, header_title, position, header_style, target_paragraph_index)
     
     @mcp.tool(
@@ -229,9 +269,7 @@ def register_tools():
         ),
     )
     def insert_line_or_paragraph_near_text(filename: str, target_text: str = None, line_text: str = None, position: str = 'after', line_style: str = None, target_paragraph_index: int = None):
-        """
-        Insert a new line or paragraph (with specified or matched style) before or after the target paragraph. Specify by text or paragraph index. Args: filename (str), target_text (str, optional), line_text (str), position ('before' or 'after'), line_style (str, optional), target_paragraph_index (int, optional).
-        """
+        """Insert a text paragraph before or after an existing paragraph. Locate the target by text (target_text) or 0-based index (target_paragraph_index); supply at least one. If line_style is omitted the new paragraph inherits the target's style. position: "before" or "after"."""
         return content_tools.insert_line_or_paragraph_near_text_tool(filename, target_text, line_text, position, line_style, target_paragraph_index)
     
     @mcp.tool(
@@ -240,7 +278,7 @@ def register_tools():
         ),
     )
     def insert_numbered_list_near_text(filename: str, target_text: str = None, list_items: list[str] = None, position: str = 'after', target_paragraph_index: int = None, bullet_type: str = 'bullet'):
-        """Insert a bulleted or numbered list before or after the target paragraph. Specify by text or paragraph index. Args: filename (str), target_text (str, optional), list_items (list of str), position ('before' or 'after'), target_paragraph_index (int, optional), bullet_type ('bullet' for bullets or 'number' for numbered lists, default: 'bullet')."""
+        """Insert a bullet or numbered list before or after an existing paragraph. Locate the target by text (target_text) or 0-based index (target_paragraph_index); supply at least one. bullet_type: "bullet" (default) or "number". position: "before" or "after"."""
         return content_tools.insert_numbered_list_near_text_tool(filename, target_text, list_items, position, target_paragraph_index, bullet_type)
     # Content tools (paragraphs, headings, tables, etc.)
     @mcp.tool(
@@ -251,18 +289,7 @@ def register_tools():
     def add_paragraph(filename: str, text: str, style: str = None,
                       font_name: str = None, font_size: int = None,
                       bold: bool = None, italic: bool = None, color: str = None):
-        """Add a paragraph to a Word document with optional formatting.
-
-        Args:
-            filename: Path to Word document
-            text: Paragraph text content
-            style: Optional paragraph style name
-            font_name: Font family (e.g., 'Helvetica', 'Times New Roman')
-            font_size: Font size in points (e.g., 14, 36)
-            bold: Make text bold
-            italic: Make text italic
-            color: Text color as hex RGB (e.g., '000000')
-        """
+        """Append a paragraph to the document. style accepts any Word style name (e.g. "Normal", "Body Text"). color is a 6-char hex string without "#" (e.g. "FF0000"). font_size is in points."""
         return content_tools.add_paragraph(filename, text, style, font_name, font_size, bold, italic, color)
     
     @mcp.tool(
@@ -273,18 +300,7 @@ def register_tools():
     def add_heading(filename: str, text: str, level: int = 1,
                     font_name: str = None, font_size: int = None,
                     bold: bool = None, italic: bool = None, border_bottom: bool = False):
-        """Add a heading to a Word document with optional formatting.
-
-        Args:
-            filename: Path to Word document
-            text: Heading text
-            level: Heading level (1-9)
-            font_name: Font family (e.g., 'Helvetica')
-            font_size: Font size in points (e.g., 14)
-            bold: Make heading bold
-            italic: Make heading italic
-            border_bottom: Add bottom border (for section headers)
-        """
+        """Append a heading to the document. level is 1–9 (1 = largest). font_size is in points. Set border_bottom=true to add an underline border."""
         return content_tools.add_heading(filename, text, level, font_name, font_size, bold, italic, border_bottom)
     
     @mcp.tool(
@@ -293,7 +309,7 @@ def register_tools():
         ),
     )
     def add_picture(filename: str, image_path: str, width: float = None):
-        """Add an image to a Word document."""
+        """Insert an image into the document. image_path must be an accessible file path. width is in inches; omit to use the image's natural size."""
         return content_tools.add_picture(filename, image_path, width)
     
     @mcp.tool(
@@ -302,7 +318,7 @@ def register_tools():
         ),
     )
     def add_table(filename: str, rows: int, cols: int, data: list[list[str]] = None):
-        """Add a table to a Word document."""
+        """Append a table with rows × cols cells. data is an optional 2-D list of strings to pre-fill cells. All subsequent row/column indices for this table are 0-based."""
         return content_tools.add_table(filename, rows, cols, data)
     
     @mcp.tool(
@@ -321,7 +337,7 @@ def register_tools():
         ),
     )
     def delete_paragraph(filename: str, paragraph_index: int):
-        """Delete a paragraph from a document."""
+        """Permanently delete the paragraph at paragraph_index (0-based). All subsequent paragraph indices shift down by 1 — call get_document_outline again if you plan further index-based operations."""
         return content_tools.delete_paragraph(filename, paragraph_index)
     
     @mcp.tool(
@@ -344,7 +360,7 @@ def register_tools():
                           italic: bool = None, font_size: int = None,
                           font_name: str = None, color: str = None,
                           base_style: str = None):
-        """Create a custom style in the document."""
+        """Define a reusable named paragraph style. base_style is the Word style to inherit from (e.g. "Normal"). Once created, pass the style name to add_paragraph or add_heading."""
         return format_tools.create_custom_style(
             filename, style_name, bold, italic, font_size, font_name, color, base_style
         )
@@ -357,7 +373,7 @@ def register_tools():
     def format_text(filename: str, paragraph_index: int, start_pos: int, end_pos: int,
                    bold: bool = None, italic: bool = None, underline: bool = None,
                    color: str = None, font_size: int = None, font_name: str = None):
-        """Format a specific range of text within a paragraph."""
+        """Apply character-level formatting to a slice of text within a paragraph. paragraph_index is 0-based. start_pos and end_pos are 0-based character offsets (end_pos exclusive). color is a 6-char hex string without "#"."""
         return format_tools.format_text(
             filename, paragraph_index, start_pos, end_pos, bold, italic,
             underline, color, font_size, font_name
@@ -370,7 +386,7 @@ def register_tools():
     )
     def format_table(filename: str, table_index: int, has_header_row: bool = None,
                     border_style: str = None, shading: list[str] = None):
-        """Format a table with borders, shading, and structure."""
+        """Apply overall table formatting: border style ("single", "double", "none"), alternating row shading (list of hex colors), and header row flag. For per-cell control use the dedicated cell tools."""
         return format_tools.format_table(filename, table_index, has_header_row, border_style, shading)
     
     # New table cell shading tools
@@ -482,7 +498,7 @@ def register_tools():
         ),
     )
     def add_footnote_to_document(filename: str, paragraph_index: int, footnote_text: str):
-        """Add a footnote to a specific paragraph in a Word document."""
+        """Add a footnote at paragraph_index (0-based). Basic version — prefer add_footnote_robust for validation and error recovery. Use add_footnote_after_text or add_footnote_before_text when you have a text anchor instead of an index."""
         return footnote_tools.add_footnote_to_document(filename, paragraph_index, footnote_text)
     
     @mcp.tool(
@@ -492,8 +508,7 @@ def register_tools():
     )
     def add_footnote_after_text(filename: str, search_text: str, footnote_text: str,
                                output_filename: str = None):
-        """Add a footnote after specific text with proper superscript formatting.
-        This enhanced function ensures footnotes display correctly as superscript."""
+        """Add a footnote reference mark immediately after search_text. Preferred when you know the anchor phrase rather than a paragraph index. Reference mark is formatted as a proper superscript. output_filename writes to a new file; omit to update in place."""
         return footnote_tools.add_footnote_after_text(filename, search_text, footnote_text, output_filename)
     
     @mcp.tool(
@@ -503,8 +518,7 @@ def register_tools():
     )
     def add_footnote_before_text(filename: str, search_text: str, footnote_text: str,
                                 output_filename: str = None):
-        """Add a footnote before specific text with proper superscript formatting.
-        This enhanced function ensures footnotes display correctly as superscript."""
+        """Add a footnote reference mark immediately before search_text. Use when the mark must precede the anchor phrase. output_filename writes to a new file; omit to update in place."""
         return footnote_tools.add_footnote_before_text(filename, search_text, footnote_text, output_filename)
     
     @mcp.tool(
@@ -514,8 +528,7 @@ def register_tools():
     )
     def add_footnote_enhanced(filename: str, paragraph_index: int, footnote_text: str,
                              output_filename: str = None):
-        """Enhanced footnote addition with guaranteed superscript formatting.
-        Adds footnote at the end of a specific paragraph with proper style handling."""
+        """Add a footnote at the end of paragraph_index (0-based) with guaranteed XML-level superscript formatting. Use instead of add_footnote_to_document when the basic version produces incorrectly formatted reference marks."""
         return footnote_tools.add_footnote_enhanced(filename, paragraph_index, footnote_text, output_filename)
     
     @mcp.tool(
@@ -548,8 +561,7 @@ def register_tools():
     )
     def delete_footnote_from_document(filename: str, footnote_id: int = None,
                                      search_text: str = None, output_filename: str = None):
-        """Delete a footnote from a Word document.
-        Identify the footnote either by ID (1, 2, 3, etc.) or by searching for text near it."""
+        """Delete a footnote by its 1-based footnote_id or by searching for nearby text (search_text); supply exactly one. output_filename writes to a new file; omit to update in place. For thorough cleanup use delete_footnote_robust."""
         return footnote_tools.delete_footnote_from_document(
             filename, footnote_id, search_text, output_filename
         )
@@ -563,8 +575,7 @@ def register_tools():
     def add_footnote_robust(filename: str, search_text: str = None,
                            paragraph_index: int = None, footnote_text: str = "",
                            validate_location: bool = True, auto_repair: bool = False):
-        """Add footnote with robust validation and Word compliance.
-        This is the production-ready version with comprehensive error handling."""
+        """PREFERRED footnote insertion tool. Adds a footnote with full validation and Word compliance. Locate the target by text (search_text) or 0-based paragraph index (paragraph_index); supply exactly one. validate_location=false skips pre-insertion checks. auto_repair=true attempts to fix malformed footnote XML before inserting."""
         return footnote_tools.add_footnote_robust_tool(
             filename, search_text, paragraph_index, footnote_text,
             validate_location, auto_repair
@@ -589,8 +600,7 @@ def register_tools():
     )
     def delete_footnote_robust(filename: str, footnote_id: int = None,
                               search_text: str = None, clean_orphans: bool = True):
-        """Delete footnote with comprehensive cleanup and orphan removal.
-        Ensures complete removal from document.xml, footnotes.xml, and relationships."""
+        """PREFERRED footnote deletion tool. Removes the footnote and cleans up all references in document.xml, footnotes.xml, and the relationship map. Identify by 1-based footnote_id or search_text; supply exactly one. clean_orphans=false skips orphan cleanup (faster)."""
         return footnote_tools.delete_footnote_robust_tool(
             filename, footnote_id, search_text, clean_orphans
         )
@@ -636,7 +646,7 @@ def register_tools():
         ),
     )
     def replace_paragraph_block_below_header(filename: str, header_text: str, new_paragraphs: list[str], detect_block_end_fn: str = None):
-        """Reemplaza el bloque de párrafos debajo de un encabezado, evitando modificar TOC."""
+        """Replace every paragraph between a named heading and the next heading with new_paragraphs. header_text must match the heading exactly. The heading itself is preserved. Leave detect_block_end_fn as None — it is reserved and has no effect via MCP."""
         return replace_paragraph_block_below_header_tool(filename, header_text, new_paragraphs, detect_block_end_fn)
 
     @mcp.tool(
@@ -645,7 +655,7 @@ def register_tools():
         ),
     )
     def replace_block_between_manual_anchors(filename: str, start_anchor_text: str, new_paragraphs: list[str], end_anchor_text: str = None, match_fn: str = None, new_paragraph_style: str = None):
-        """Replace all content between start_anchor_text and end_anchor_text (or next logical header if not provided)."""
+        """Replace all paragraphs between two anchor paragraphs with new_paragraphs. start_anchor_text and end_anchor_text identify the boundary paragraphs (both preserved); end_anchor_text defaults to the next heading if omitted. new_paragraph_style sets the Word style for inserted paragraphs (default "Normal"). Leave match_fn as None — it is reserved and has no effect via MCP."""
         return replace_block_between_manual_anchors_tool(filename, start_anchor_text, new_paragraphs, end_anchor_text, match_fn, new_paragraph_style)
 
     # Comment tools
