@@ -120,10 +120,14 @@ SAVING
 - Call save_document only when you want to produce a download link for the user.
 - save_document returns a download_url field — always pass this URL to the user as the final step.
 
+FILE UPLOADS NOT SUPPORTED
+- This server cannot receive uploaded files from the user. Do not ask the user to upload any file (Word template, image, etc.).
+- If a task requires an uploaded file, tell the user clearly: "This MCP server cannot accept file uploads — it can only create documents from scratch."
+
 TOOL CATEGORIES
 - Inspect documents:      get_document_info, get_document_text, get_document_outline, get_document_xml, list_available_documents, get_paragraph_text_from_document, find_text_in_document
 - Document lifecycle:     create_document, copy_document, save_document
-- Add content:            add_paragraph, add_heading, add_picture, add_table, add_page_break
+- Add content:            add_paragraph, add_heading, add_table, add_page_break
 - Insert near content:    insert_header_near_text, insert_line_or_paragraph_near_text, insert_numbered_list_near_text
 - Edit existing content:  search_and_replace, delete_paragraph, replace_paragraph_block_below_header, replace_block_between_manual_anchors
 - Table formatting:       format_table, set_table_cell_shading, apply_table_alternating_rows, highlight_table_header, merge_table_cells, merge_table_cells_horizontal, merge_table_cells_vertical, set_table_cell_alignment, set_table_alignment_all, set_table_column_width, set_table_column_widths, set_table_width, auto_fit_table_columns, format_table_cell_text, set_table_cell_padding
@@ -303,14 +307,15 @@ def register_tools():
         """Append a heading to the document. level is 1–9 (1 = largest). font_size is in points. Set border_bottom=true to add an underline border."""
         return content_tools.add_heading(filename, text, level, font_name, font_size, bold, italic, border_bottom)
     
-    @mcp.tool(
-        annotations=ToolAnnotations(
-            title="Add Picture",
-        ),
-    )
-    def add_picture(filename: str, image_path: str, width: float = None):
-        """Insert an image into the document. image_path must be an accessible file path. width is in inches; omit to use the image's natural size."""
-        return content_tools.add_picture(filename, image_path, width)
+    # add_picture is disabled — file uploads to this server are not supported
+    # @mcp.tool(
+    #     annotations=ToolAnnotations(
+    #         title="Add Picture",
+    #     ),
+    # )
+    # def add_picture(filename: str, image_path: str, width: float = None):
+    #     """Insert an image into the document. image_path must be an accessible file path. width is in inches; omit to use the image's natural size."""
+    #     return content_tools.add_picture(filename, image_path, width)
     
     @mcp.tool(
         annotations=ToolAnnotations(
